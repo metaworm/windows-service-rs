@@ -5,8 +5,8 @@ use std::{io, ptr};
 use widestring::WideCString;
 use windows_sys::Win32::System::Services;
 
-use crate::sc_handle::ScHandle;
-use crate::service::{to_wide, RawServiceInfo, Service, ServiceAccess, ServiceInfo};
+use crate::service::{to_wide, RawServiceInfo, Service, ServiceAccess, ServiceInfo, ServiceStatus};
+use crate::{sc_handle::ScHandle, service::ServiceType};
 use crate::{Error, Result};
 
 bitflags::bitflags! {
@@ -257,5 +257,77 @@ impl ServiceManager {
                 &buffer[..usize::try_from(buffer_len).unwrap()],
             ))
         }
+    }
+
+    /// Enumerate the service with given servcie type.
+    ///
+    /// # Arguments
+    ///
+    /// * `ty` - The service type.
+    ///
+    #[inline]
+    pub fn enum_service(
+        &self,
+        ty: ServiceType,
+    ) -> Result<impl Iterator<Item = (OsString, OsString, ServiceStatus)>> {
+        Ok(self
+            .enum_service_raw(ty)?
+            .filter_map(|x| Some((x.0, x.1, ServiceStatus::from_raw_ex(x.2).ok()?))))
+    }
+
+    /// Enumerate the service with given servcie type, but return the raw SERVICE_STATUS_PROCESS type.
+    ///
+    /// # Arguments
+    ///
+    /// * `ty` - The service type.
+    ///
+    pub fn enum_service_raw(
+        &self,
+        ty: ServiceType,
+    ) -> Result<impl Iterator<Item = (OsString, OsString, Services::SERVICE_STATUS_PROCESS)>> {
+        let mut data = vec![0u8; 0x200];
+        let mut count;
+        loop {
+            let mut cbneed = 0u32;
+            let mut resume_handle = 0u32;
+            count = 0;
+
+            if unsafe {
+                Services::EnumServicesStatusExW(
+                    self.manager_handle.raw_handle(),
+                    Services::SC_ENUM_PROCESS_INFO,
+                    ty.bits(),
+                    Services::SERVICE_STATE_ALL,
+                    data.as_mut_ptr(),
+                    data.len() as _,
+                    &mut cbneed,
+                    &mut count,
+                    &mut resume_handle,
+                    core::ptr::null(),
+                )
+            } != 0
+            {
+                break;
+            }
+
+            if windows_sys::Win32::Foundation::ERROR_MORE_DATA
+                == unsafe { windows_sys::Win32::Foundation::GetLastError() }
+            {
+                data.resize(cbneed as usize, 0);
+            } else {
+                return Err(Error::Winapi(std::io::Error::last_os_error()));
+            }
+        }
+
+        Ok((0..count).filter_map(move |i| unsafe {
+            let item = (data.as_ptr() as *const Services::ENUM_SERVICE_STATUS_PROCESSW)
+                .add(i as _)
+                .as_ref()?;
+            Some((
+                WideCString::from_ptr_str(item.lpServiceName).to_os_string(),
+                WideCString::from_ptr_str(item.lpDisplayName).to_os_string(),
+                item.ServiceStatusProcess,
+            ))
+        }))
     }
 }

@@ -1319,7 +1319,9 @@ impl ServiceStatus {
     /// # Errors
     ///
     /// Returns an error if the `dwCurrentState` field does not represent a valid [`ServiceState`].
-    fn from_raw_ex(raw: Services::SERVICE_STATUS_PROCESS) -> Result<Self, ParseRawError> {
+    pub(crate) fn from_raw_ex(
+        raw: Services::SERVICE_STATUS_PROCESS,
+    ) -> Result<Self, ParseRawError> {
         let current_state = ServiceState::from_raw(raw.dwCurrentState)?;
         let process_id = match current_state {
             ServiceState::Running => Some(raw.dwProcessId),
