@@ -82,6 +82,8 @@ bitflags::bitflags! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum ServiceStartType {
+    BootStart = Services::SERVICE_BOOT_START,
+    SystemStart = Services::SERVICE_SYSTEM_START,
     /// Autostart on system startup
     AutoStart = Services::SERVICE_AUTO_START,
     /// Service is enabled, can be started manually
@@ -91,7 +93,7 @@ pub enum ServiceStartType {
 }
 
 impl ServiceStartType {
-    pub fn to_raw(&self) -> u32 {
+    pub const fn to_raw(&self) -> u32 {
         *self as u32
     }
 
@@ -100,6 +102,8 @@ impl ServiceStartType {
             x if x == ServiceStartType::AutoStart.to_raw() => Ok(ServiceStartType::AutoStart),
             x if x == ServiceStartType::OnDemand.to_raw() => Ok(ServiceStartType::OnDemand),
             x if x == ServiceStartType::Disabled.to_raw() => Ok(ServiceStartType::Disabled),
+            x if x == ServiceStartType::BootStart.to_raw() => Ok(ServiceStartType::BootStart),
+            x if x == ServiceStartType::SystemStart.to_raw() => Ok(ServiceStartType::SystemStart),
             _ => Err(ParseRawError::InvalidInteger(raw)),
         }
     }
